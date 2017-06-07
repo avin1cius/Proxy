@@ -17,7 +17,6 @@ class Writer
 {
     Data &data;
     Semaphore &sem;
-    int rear;
     
  public:
     Writer( Data& d, Semaphore& s );

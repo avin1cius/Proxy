@@ -7,7 +7,7 @@
 
 int main()
 {
-    int nClients;
+    int nClients, serverPort;
     char hostname[16];
 
     Data sharedData;
@@ -17,24 +17,27 @@ int main()
     Writer writer( sharedData, *semaphore );
 
     Reader reader( sharedData, *semaphore );
+
+    std::cout << "Digite porta do servidor: ";
+    std::cin >> serverPort;
     
     std::cout << "Digite o numero de clientes: ";
     std::cin >> nClients;
 
     int port[nClients];
 
-    std::cout << "Digite porta do servidor: ";
-    std::cin >> port[0];
+    for(int i=0; i<nClients; i++)
+    {
+        std::cout << "Digite hostname e porta do cliente " << i+1 << ": ";    
+        std::cin >> hostname >> port[i];    
+    }    
 
-    std::cout << "Digite hostname e porta do cliente: ";    
-    std::cin >> hostname >> port[1];    
-
-    std::thread tWriter = std::thread( &Writer::run, writer, port[0] );
+    std::thread tWriter = std::thread( &Writer::run, writer, serverPort );
 
     std::thread *tReader = new std::thread [nClients];
 
     for (int i = 0; i < nClients; i++) {
-        tReader[i] = std::thread( &Reader::run, reader, hostname, port[1], false );
+        tReader[i] = std::thread( &Reader::run, reader, hostname, port[i], false );
     }
 
     for (int i = 0; i < nClients; i++) {

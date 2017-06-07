@@ -13,7 +13,7 @@ void error(const char *msg)
 }
 
 void Reader::run( char *hostname, unsigned int port, bool priority )
-{   
+{
     int sock, n;
     unsigned int length;
 
@@ -22,12 +22,6 @@ void Reader::run( char *hostname, unsigned int port, bool priority )
 
     // A estrutura hostent representa um host na Internet
     struct hostent *hp;
-
-    /*if (argc != 3)
-    {
-        printf("Usage: server port\n");
-        exit(1);
-    }*/
 
     // Cria um socket do tipo datagrama e retorna um descritor
     sock = socket(AF_INET, SOCK_DGRAM, 0);
@@ -73,7 +67,7 @@ void Reader::run( char *hostname, unsigned int port, bool priority )
             sem.P( sem.r );
         }
         else{
-            data.nReaders++;
+            data.nReaders++; 
             if( data.dReaders )
             {
                 data.dReaders--;
@@ -91,18 +85,24 @@ void Reader::run( char *hostname, unsigned int port, bool priority )
 
         front = ( front + BUFFER_SIZE ) % ( NBUFFERS * BUFFER_SIZE );
         
-        aux = (aux + front);
-    }
+        aux = (data.buffer + front);
 
-    if( priority ) 
-    {
-        data.nPriorityReaders--;
+        sem.P( sem.mutex );
+        if( priority ) 
+        {
+            data.nPriorityReaders--;
         if( data.dPriorityReaders )
         {
             data.dPriorityReaders--;
             sem.V( sem.pr);
         }
         else if( data.dReaders ) sem.V( sem.r );
-        sem.V( sem.mutex );
+        else sem.V( sem.mutex );
+        }
+        else
+        {            
+            data.nReaders--;
+            sem.V( sem.mutex );
+        }
     }    
 }

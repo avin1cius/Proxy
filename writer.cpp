@@ -1,10 +1,7 @@
 #include "writer.h"
 #include <iostream>
 
-Writer::Writer( Data &d, Semaphore &s ) : data(d), sem(s)
-{
-    rear = 0;
-}
+Writer::Writer( Data &d, Semaphore &s ) : data(d), sem(s){}
 
 void error(const char *msg);
 
@@ -22,11 +19,13 @@ void Writer::run( unsigned int port )
         fprintf(stderr, "ERROR, no port provided\n");
         exit(0);
     }*/
-
+    
     // Cria um socket do tipo datagrama e retorna um descritor
     sock = socket(AF_INET, SOCK_DGRAM, 0);
 
     if (sock < 0) error("Opening socket");
+
+    length = sizeof(server);
 
     // Zera a estrutura "server"
     bzero(&server, length);
@@ -36,8 +35,6 @@ void Writer::run( unsigned int port )
     server.sin_addr.s_addr = INADDR_ANY;
     // A funcao htons() converte o numero da porta para o padrao Little Endian.
     server.sin_port = htons(port);
-
-    length = sizeof(server);
 
     // Associa um socket a um endereco
     if (bind(sock, (struct sockaddr *) &server, length) < 0)
@@ -55,11 +52,10 @@ void Writer::run( unsigned int port )
         // endereco da maquina que enviou o pacote, tamanho da estrutura do endereco.
         // Retorna o numero de bytes recebidos.
         n = recvfrom(sock, aux, BUFFER_SIZE, 0, (struct sockaddr *) &from, &fromlen);
-
         if (n < 0) error("recvfrom");
 
-        rear = ( rear + BUFFER_SIZE ) % ( NBUFFERS * BUFFER_SIZE );
+        data.rear = ( data.rear + BUFFER_SIZE ) % ( NBUFFERS * BUFFER_SIZE );
         
-        aux = (aux + rear);  
+        aux = (data.buffer + data.rear);  
     }
  }
