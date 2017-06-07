@@ -9,15 +9,19 @@
 #include <string.h>
 #include <netdb.h>
 #include <stdio.h>
+//#include "pthread.h"
+#include "semaphore.h"
+#include "data.h"
 
 class Reader
 {
-    char &buf;
-    bool priority;
-    int executionTime;
+    Data &data;
+    Semaphore &sem;
+    int front;
 
  public:
-    void run();
+    Reader( Data &d, Semaphore &s );
+    void run( char *hostname, unsigned int port, bool priority );
 };
 
 #endif /* READER_H  */

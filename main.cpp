@@ -1,38 +1,47 @@
 #include <iostream>
+#include <thread>
 #include "reader.h"
 #include "writer.h"
+#include "data.h"
 
-#define BUFFER_SIZE 1316
-#define NBUFFERS 48
 
-using namespace std;
+int main()
+{
+    int nClients;
+    char hostname[16];
 
-int main() {
+    Data sharedData;
 
-    char buf[NBUFFERS*BUFFER_SIZE];
+    Semaphore *semaphore = new Semaphore();
 
-    std::cout << "Digite o numero de clientes" << std::endl;
+    Writer writer( sharedData, *semaphore );
+
+    Reader reader( sharedData, *semaphore );
+    
+    std::cout << "Digite o numero de clientes: ";
     std::cin >> nClients;
 
-    Writer writer( *buf );
+    int port[nClients];
 
-    Reader reader( *buf );
+    std::cout << "Digite porta do servidor: ";
+    std::cin >> port[0];
 
-    std::thread tWriter = std::thread( &Carro::run, writer, port, ip );
+    std::cout << "Digite hostname e porta do cliente: ";    
+    std::cin >> hostname >> port[1];    
+
+    std::thread tWriter = std::thread( &Writer::run, writer, port[0] );
 
     std::thread *tReader = new std::thread [nClients];
 
     for (int i = 0; i < nClients; i++) {
-        tReader[i] = std::thread( &Reader::run, reader, port, ip );
+        tReader[i] = std::thread( &Reader::run, reader, hostname, port[1], false );
     }
 
     for (int i = 0; i < nClients; i++) {
         tReader[i].join();
     }
 
-    tCarro.join();
-
-    delete carro;
+    tWriter.join();
 
     return 0;
 }

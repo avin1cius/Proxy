@@ -9,13 +9,19 @@
 #include <string.h>
 #include <netdb.h>
 #include <stdio.h>
+//#include "pthread.h"
+#include "semaphore.h"
+#include "data.h"
 
 class Writer
 {
-    char &buf
+    Data &data;
+    Semaphore &sem;
+    int rear;
     
  public:
-    void run();
+    Writer( Data& d, Semaphore& s );
+    void run( unsigned int );
 };
 
 #endif /* WRITER_H  */

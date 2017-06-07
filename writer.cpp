@@ -1,14 +1,14 @@
 #include "writer.h"
+#include <iostream>
 
-Writer::Writer( char &b) : buf(b){}
-
-void error(const char *msg)
+Writer::Writer( Data &d, Semaphore &s ) : data(d), sem(s)
 {
-    perror(msg);
-    exit(0);
+    rear = 0;
 }
 
-void Writer::run(int argc, char *argv[])
+void error(const char *msg);
+
+void Writer::run( unsigned int port )
 {
     int sock, length, n;
     socklen_t fromlen;
@@ -17,16 +17,11 @@ void Writer::run(int argc, char *argv[])
     struct sockaddr_in server;
     struct sockaddr_in from;
 
-    // Buffer para receber mensagens
-    char buf[NBUFFERS*BUFFER_SIZE];
-
-    //ary[i][j] is then rewritten as ary[i*sizeY+j]
-
-    if (argc < 2)
+    /*if (argc < 2)
     {
         fprintf(stderr, "ERROR, no port provided\n");
         exit(0);
-    }
+    }*/
 
     // Cria um socket do tipo datagrama e retorna um descritor
     sock = socket(AF_INET, SOCK_DGRAM, 0);
@@ -40,7 +35,7 @@ void Writer::run(int argc, char *argv[])
     // Seta o endereco para localhost (127.0.0.1)
     server.sin_addr.s_addr = INADDR_ANY;
     // A funcao htons() converte o numero da porta para o padrao Little Endian.
-    server.sin_port = htons(atoi(argv[1]));
+    server.sin_port = htons(port);
 
     length = sizeof(server);
 
@@ -50,8 +45,7 @@ void Writer::run(int argc, char *argv[])
 
     fromlen = sizeof(struct sockaddr_in);
 
-    int front = 0, rear = 0;
-    rear = BUFFER_SIZE;
+    char *aux = data.buffer;
 
     while (1)
     {
@@ -60,12 +54,12 @@ void Writer::run(int argc, char *argv[])
         // parametro. Parametros: socket, buffer, tamanho do buffer, flags,
         // endereco da maquina que enviou o pacote, tamanho da estrutura do endereco.
         // Retorna o numero de bytes recebidos.
-        n = recvfrom(sock, buf, BUFFER_SIZE, 0, (struct sockaddr *) &from, &fromlen);
+        n = recvfrom(sock, aux, BUFFER_SIZE, 0, (struct sockaddr *) &from, &fromlen);
+
+        if (n < 0) error("recvfrom");
 
         rear = ( rear + BUFFER_SIZE ) % ( NBUFFERS * BUFFER_SIZE );
         
-        buf = *( buf + rear);
-
-        if (n < 0) error("recvfrom");
+        aux = (aux + rear);  
     }
  }
