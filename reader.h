@@ -17,10 +17,11 @@ class Reader
 {
     Data &data;
     Semaphore &sem;
-    int front;
+    unsigned int front;
 
  public:
     Reader( Data &d, Semaphore &s );
+    void signal( const bool & );
     void run( char *hostname, unsigned int port, bool priority );
 };
 

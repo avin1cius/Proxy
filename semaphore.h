@@ -13,9 +13,10 @@ class Semaphore
     Semaphore()
     {
         sem_init( &mutex, 0, 1);
-        sem_init( &pr, 0, 1 );
-        sem_init( &r, 0, 1);
-        sem_init( &w, 0, 1);
+        sem_init( &hpr, 0, 0 );
+        sem_init( &lpr, 0, 0);
+        sem_init( &r, 0, 0);        
+        sem_init( &w, 0, 0);
     }
 
     void P( sem_t &sem )

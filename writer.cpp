@@ -11,8 +11,7 @@ void Writer::run( unsigned int port )
     socklen_t fromlen;
 
     // A estrutura sockaddr_in contem um endereco de internet
-    struct sockaddr_in server;
-    struct sockaddr_in from;
+    struct sockaddr_in server, from;
 
     /*if (argc < 2)
     {
@@ -55,7 +54,15 @@ void Writer::run( unsigned int port )
         if (n < 0) error("recvfrom");
 
         data.rear = ( data.rear + BUFFER_SIZE ) % ( NBUFFERS * BUFFER_SIZE );
-        
-        aux = (data.buffer + data.rear);  
+                
+        aux = (data.buffer + data.rear);
+
+        sem.P( sem.mutex );
+        if( data.sync[rear] =! data.nClients ) 
+        { 
+            data.dWriter = true;
+            sem.V( sem.mutex );
+            sem.P( sem.w );
+        }  
     }
  }

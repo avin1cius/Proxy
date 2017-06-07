@@ -12,6 +12,39 @@ void error(const char *msg)
     exit(0);
 }
 
+void Reader::signal( const bool &priority )
+{
+    sem.P( sem.mutex );
+    if( priority && (!data.nPriorityReaders) )
+    { 
+        data.nPriorityReaders++;
+        sem.V( sem.mutex );
+    }
+    else if( priority )
+    {
+        data.dPriorityReaders++;
+        sem.V( sem.mutex );
+        sem.P( sem.hpr ); // High priority readers semaphore
+        data.nPriorityReaders++;            
+    }
+    else if( data.nPriorityReaders )
+    {
+        data.dReaders++;
+        sem.V( sem.mutex );
+        sem.P( sem.lpr ); // Low priority readers semaphore
+        data.nReaders++;
+    }
+    else{
+        data.nReaders++;
+        if( data.dReaders )
+        {
+            data.dReaders--;
+            sem.V( sem.lpr );
+        }
+        else sem.V( sem.mutex );
+    }
+}
+
 void Reader::run( char *hostname, unsigned int port, bool priority )
 {
     int sock, n;
@@ -48,33 +81,7 @@ void Reader::run( char *hostname, unsigned int port, bool priority )
     while(1) //START 
     { 
         // Dar acesso exclusivo ao leitor com prioridade
-        sem.P( sem.mutex );
-        if( priority && (!data.nPriorityReaders) )
-        { 
-            data.nPriorityReaders++;
-            sem.V( sem.mutex );
-        }
-        else if( priority )
-        {
-            data.dPriorityReaders++;
-            sem.V( sem.mutex );
-            sem.P( sem.pr );            
-        }
-        else if( data.nPriorityReaders )
-        {
-            data.dReaders++;
-            sem.V( sem.mutex );
-            sem.P( sem.r );
-        }
-        else{
-            data.nReaders++; 
-            if( data.dReaders )
-            {
-                data.dReaders--;
-                sem.V( sem.r );
-            }
-            else sem.V( sem.mutex );
-        }        
+        signal( priority );
 
         // Envia dados pela rede. Parametros: socket, buffer que contem os dados,
         // tamanho do buffer, flags, endereco da maquina destino, tamanho da estrutura do endereco.
@@ -83,26 +90,30 @@ void Reader::run( char *hostname, unsigned int port, bool priority )
 
         if (n < 0) error("Sendto");
 
+        sem.P( sem.mutex );
+        data.sync[front]++;
+        if( data.sync[front] == data.nClients )
+        {
+            if( data.dWriter ) { data.dWriter = false; sem.V( sem.w ); }
+        }
+        sem.V( sem.mutex );
+        
         front = ( front + BUFFER_SIZE ) % ( NBUFFERS * BUFFER_SIZE );
         
-        aux = (data.buffer + front);
+        aux = ( data.buffer + front );
 
         sem.P( sem.mutex );
         if( priority ) 
         {
             data.nPriorityReaders--;
-        if( data.dPriorityReaders )
-        {
-            data.dPriorityReaders--;
-            sem.V( sem.pr);
+            if( data.dPriorityReaders )
+            {
+                data.dPriorityReaders--;
+                sem.V( sem.hpr);
+            }
+            else if( data.dReaders ) sem.V( sem.lpr );
+            else sem.V( sem.mutex );
         }
-        else if( data.dReaders ) sem.V( sem.r );
-        else sem.V( sem.mutex );
-        }
-        else
-        {            
-            data.nReaders--;
-            sem.V( sem.mutex );
-        }
+        else { data.nReaders--; sem.V( sem.mutex ); }
     }    
 }
