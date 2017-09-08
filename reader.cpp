@@ -12,43 +12,89 @@ void error(const char *msg)
     exit(0);
 }
 
-void Reader::signal( const bool &priority )
-{
-    sem.P( sem.mutex );
-    if( priority && (!data.nPriorityReaders) )
-    { 
-        data.nPriorityReaders++;
-        sem.V( sem.mutex );
-    }
-    else if( priority )
+void Reader::entry( const bool &priority )
+{    
+    if( priority )
     {
-        data.dPriorityReaders++;
+        sem.P( sem.mutex );
+        if( data.nClientsOn )
+        {
+            data.dWriters++;
+            sem.V( sem.mutex );
+            sem.P( sem.w ); // Writer (4K) semaphore
+        }
+        data.nWriters++;
+        data.nClientsOn++;
+        // Signal
         sem.V( sem.mutex );
-        sem.P( sem.hpr ); // High priority readers semaphore
-        data.nPriorityReaders++;            
     }
-    else if( data.nPriorityReaders )
+    else
     {
-        data.dReaders++;
-        sem.V( sem.mutex );
-        sem.P( sem.lpr ); // Low priority readers semaphore
+        sem.P( sem.mutex );
+        if( data.nWriters )
+        {
+            data.dReaders++;
+            sem.V( sem.mutex );
+            sem.P( sem.r ); // Low priority readers semaphore
+        }
         data.nReaders++;
-    }
-    else{
-        data.nReaders++;
+        data.nClientsOn++;
+        // Signal
         if( data.dReaders )
         {
             data.dReaders--;
-            sem.V( sem.lpr );
+            sem.V( sem.r );
         }
         else sem.V( sem.mutex );
     }
 }
 
-void Reader::run( char *hostname, unsigned int port, bool priority )
+void Reader::exit( const bool &priority )
 {
+    if( priority )
+    {
+        sem.P( sem.mutex );
+        data.nWriters--;
+        data.nClientsOn--;
+        // Signal
+        if( data.dWriters )
+        {
+            data.dWriters--;
+            sem.V( sem.w );
+        }
+        else if( data.dReaders )
+        {
+            data.dReaders--;
+            sem.V( sem.r );
+        }
+        else sem.V( sem.mutex );
+    }
+    else
+    {
+        sem.P( sem.mutex );
+        data.nReaders--;
+        data.nClientsOn--;
+        // Signal
+        if( ( data.nClientsOn == 0 ) && ( data.dWriters ) )
+        {
+            data.dWriters--;
+            sem.V( sem.w );
+        }
+        else sem.V( sem.mutex );
+    }
+}
+
+void Reader::run( std::string sHostname, const unsigned int &port, const bool &priority, const unsigned int &i )
+{
+    id = i;
     int sock, n;
     unsigned int length;
+
+    char hostname[16];
+    for(unsigned i=0; i < sHostname.length(); i++)
+    {
+            hostname[i] = sHostname[i];
+    }
 
     // A estrutura sockaddr_in contem um endereco de internet
     struct sockaddr_in server, from;
@@ -61,14 +107,13 @@ void Reader::run( char *hostname, unsigned int port, bool priority )
 
     if (sock < 0) error("socket");
 
-    // Define a familia do endereco como do tipo Internet
-    server.sin_family = AF_INET;
-
     // Preenche a estrutura "hp" a partir do nome da maquina ou de seu IP
     hp = gethostbyname(hostname);
 
     if (hp == 0) error("Unknown host");
 
+    // Define a familia do endereco como do tipo Internet
+    server.sin_family = AF_INET;
     // Copia o IP da estrutura "hp" para a estrutura "server"
     bcopy( (char *) hp->h_addr, (char *) &server.sin_addr, hp->h_length);
     // A funcao htons() converte o numero da porta para o padrao Little Endian.
@@ -78,42 +123,61 @@ void Reader::run( char *hostname, unsigned int port, bool priority )
 
     char *aux = data.buffer;
 
-    while(1) //START 
-    { 
-        // Dar acesso exclusivo ao leitor com prioridade
-        signal( priority );
+    while(1)
+    {
+        // Protocolo de entrada (Leitores e Escritores)
+        entry( priority );
 
-        // Envia dados pela rede. Parametros: socket, buffer que contem os dados,
-        // tamanho do buffer, flags, endereco da maquina destino, tamanho da estrutura do endereco.
-        // Retorna o numero de bytes enviados.
-        n = sendto(sock, aux, BUFFER_SIZE, 0, (const struct sockaddr *) &server, length);
+        sem.P( sem.mutex2 );
+        data.on[id] = true;
+        data.cPaused[id] = false;
+        sem.V( sem.mutex2 );
 
-        if (n < 0) error("Sendto");
-
-        sem.P( sem.mutex );
-        data.sync[front]++;
-        if( data.sync[front] == data.nClients )
+        while( data.Start[id] )
         {
-            if( data.dWriter ) { data.dWriter = false; sem.V( sem.w ); }
-        }
-        sem.V( sem.mutex );
-        
-        front = ( front + BUFFER_SIZE ) % ( NBUFFERS * BUFFER_SIZE );
-        
-        aux = ( data.buffer + front );
-
-        sem.P( sem.mutex );
-        if( priority ) 
-        {
-            data.nPriorityReaders--;
-            if( data.dPriorityReaders )
+            // Protocolo de entrada (Buffer limitado)
+            sem.P( sem.mutex );
+            if( data.dProducer )
             {
-                data.dPriorityReaders--;
-                sem.V( sem.hpr);
+                data.dProducer = false;
+                sem.V( sem.p );
             }
-            else if( data.dReaders ) sem.V( sem.lpr );
-            else sem.V( sem.mutex );
+            sem.V( sem.mutex );
+
+            sem.P( sem.mutex3 );
+            if( front == data.rear )
+            {
+                data.dClientsOn++;
+                sem.V( sem.mutex3 );
+                sem.P( sem.sync );
+            }
+            else sem.V( sem.mutex3 );
+
+            sem.P( sem.full[id] );
+            // Envia dados pela rede. Parametros: socket, buffer que contem os dados,
+            // tamanho do buffer, flags, endereco da maquina destino, tamanho da estrutura do endereco.
+            // Retorna o numero de bytes enviados.
+            n = sendto(sock, aux, BUFFER_SIZE, 0, (const struct sockaddr *) &server, length);
+            if (n < 0) error("Sendto");
+            // Protocolo de saída (Buffer limitado)
+            sem.V( sem.empty[id] );
+
+            front = ( front + BUFFER_SIZE ) % ( NBUFFERS * BUFFER_SIZE );
+            aux = ( data.buffer + front );
+
+            std::cout << "L" << id <<  std::endl;
         }
-        else { data.nReaders--; sem.V( sem.mutex ); }
-    }    
+        // Protocolo de saída (Leitores e Escritores)
+        exit( priority );
+
+        sem.resetSem(id);
+
+        sem.P( sem.mutex2 );
+        data.on[id] = false;
+        data.cPaused[id] = true;
+        sem.V( sem.mutex2 );
+        sem.P( sem.c[id] );        
+    }
+
 }
+

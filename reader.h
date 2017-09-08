@@ -9,20 +9,20 @@
 #include <string.h>
 #include <netdb.h>
 #include <stdio.h>
-//#include "pthread.h"
-#include "semaphore.h"
+#include "semaphores.h"
 #include "data.h"
 
 class Reader
 {
     Data &data;
     Semaphore &sem;
-    unsigned int front;
+    unsigned int front, id;
 
  public:
     Reader( Data &d, Semaphore &s );
-    void signal( const bool & );
-    void run( char *hostname, unsigned int port, bool priority );
+    void entry( const bool & );
+    void exit( const bool & );
+    void run( const std::string, const unsigned int &, const bool &, const unsigned int & );
 };
 
 #endif /* READER_H  */

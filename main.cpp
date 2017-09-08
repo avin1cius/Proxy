@@ -1,49 +1,27 @@
-#include <iostream>
-#include <thread>
-#include "reader.h"
-#include "writer.h"
-#include "data.h"
+#include "main.h"
 
-int main()
+bool server_on;
+
+int main(int argc, char *argv[])
 {
-    int serverPort;
-    char hostname[16];
+    QApplication a(argc, argv);
 
     Data sharedData;
 
+    std::thread tProducer;
+
+    std::thread *tReader = new std::thread [5];
+
     Semaphore *semaphore = new Semaphore();
 
-    Writer writer( sharedData, *semaphore );
+    Producer producer( sharedData, *semaphore );
 
     Reader reader( sharedData, *semaphore );
 
-    std::cout << "Digite porta do servidor: ";
-    std::cin >> serverPort;
-    
-    std::cout << "Digite o numero de clientes: ";
-    std::cin >> sharedData.nClients;
+    MainWindow w( producer, reader, sharedData, tReader, tProducer );
 
-    int port[sharedData.nClients];
+    w.show();
 
-    for(int i = 0; i < sharedData.nClients; i++)
-    {
-        std::cout << "Digite hostname e porta do cliente " << i+1 << ": ";    
-        std::cin >> hostname >> port[i];    
-    }    
-
-    std::thread tWriter = std::thread( &Writer::run, writer, serverPort );
-
-    std::thread *tReader = new std::thread [sharedData.nClients];
-
-    for (int i = 0; i < sharedData.nClients; i++) {
-        tReader[i] = std::thread( &Reader::run, reader, hostname, port[i], false );
-    }
-
-    for (int i = 0; i < sharedData.nClients; i++) {
-        tReader[i].join();
-    }
-
-    tWriter.join();
-
-    return 0;
+    return a.exec();
+    //while(1);
 }
